@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FNT Reader</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <section class="row">
+    <button id="btnOpen">Open .fnt…</button>
+    <span id="fontName" class="muted">No font loaded</span>
+  </section>
+
+  <section>
+    <label for="text">Text</label>
+    <textarea id="text" rows="2" spellcheck="false">1250</textarea>
+    <div id="missing" class="warn" hidden></div>
+  </section>
+
+  <section class="grid">
+    <label>Size (%) <input id="scale" class="scrub" type="text" inputmode="decimal" value="100" data-min="1" data-step="5"></label>
+    <label>Tracking (px) <input id="tracking" class="scrub" type="text" inputmode="decimal" value="0" data-step="1"></label>
+    <label>Line height (px) <input id="lineHeight" class="scrub" type="text" inputmode="decimal" data-step="1"></label>
+    <label>Background
+      <select id="bg">
+        <option value="checker">Checkerboard</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
+  </section>
+
+  <canvas id="preview" tabindex="0" width="400" height="200"></canvas>
+  <div class="muted small">Click a letter to adjust it. Arrow keys: ← → kerning, ↑ ↓ Y position.</div>
+
+  <section id="letterPanel" class="grid" hidden>
+    <div class="full"><strong>Letter <span id="selChar"></span></strong>
+      <button id="btnResetLetter" class="small-btn">Reset</button></div>
+    <label>Kerning (px) <input id="ovKern" class="scrub" type="text" inputmode="decimal" data-step="1" value="0"></label>
+    <label>Y (px) <input id="ovDy" class="scrub" type="text" inputmode="decimal" data-step="1" value="0"></label>
+    <label>Scale (%) <input id="ovScale" class="scrub" type="text" inputmode="decimal" data-step="5" value="100" data-min="1"></label>
+    <label>Rotation (°) <input id="ovRot" class="scrub" type="text" inputmode="decimal" data-step="1" value="0"></label>
+  </section>
+
+  <section class="grid">
+    <div class="full"><span id="link" class="muted">Composition: new</span><span><button id="btnLoad" class="small-btn" title="Load the font and settings from the active composition">Load from active comp</button> <button id="btnUnlink" class="small-btn" hidden>Unlink</button></span></div>
+    <label class="full" id="nameRow">Comp name <input id="compName" type="text" value="FNT Text"></label>
+    <label>FPS <input id="fps" class="scrub" type="text" inputmode="decimal" value="30" data-min="1"></label>
+    <label>Duration (s) <input id="duration" class="scrub" type="text" inputmode="decimal" value="5" data-min="0.1" data-step="0.5"></label>
+    <label>Margin (px) <input id="padding" class="scrub" type="text" inputmode="decimal" value="20" data-min="0"></label>
+  </section>
+
+  <button id="btnCreate" class="primary" disabled>Create composition</button>
+  <button id="btnCreateNew" hidden>Create new composition</button>
+  <div id="status" class="muted small"></div>
+
+  <script src="../core/fntParser.js"></script>
+  <script src="../core/layout.js"></script>
+  <script src="js/scrub.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

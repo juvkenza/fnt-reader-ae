@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Run tests
+        run: node --test tests/core.test.js
+      - name: Check tag matches manifest version
+        shell: pwsh
+        run: |
+          $v = ([xml](Get-Content src/CSXS/manifest.xml)).ExtensionManifest.ExtensionBundleVersion
+          if ("v$v" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match manifest version v$v" }
+      - name: Build signed .zxp
+        shell: pwsh
+        run: ./scripts/build-zxp.ps1
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/*.zxp).FullName --title "FNT Reader $env:GITHUB_REF_NAME" --generate-notes
