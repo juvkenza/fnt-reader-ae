@@ -9,6 +9,7 @@
     font: null, imgs: [], fntPath: null, pngPaths: [],
     overrides: {}, selected: null, layout: null, view: null,
     linked: null, // { id, name } of the linked comp (update mode)
+    loadedAlign: null, // alignment stored in the linked comp ("0" | "50" | "100")
     decManual: false, // the user edited "Decimals" by hand: stop auto-detecting it
     loadedNum: null // typed number stored in the linked comp (to know if the Number slider must be reset)
   };
@@ -248,7 +249,7 @@
       fnt: state.fntPath, text: $("text").value, overrides: state.overrides,
       padding: parseFloat($("padding").value) || 0, fps: parseFloat($("fps").value) || 30,
       duration: parseFloat($("duration").value) || 5, bg: $("bg").value,
-      counterOn: $("counterOn").checked, decimals: parseInt($("decimals").value, 10) || 0, zeros: $("zeros").checked
+      counterOn: $("counterOn").checked, decimals: parseInt($("decimals").value, 10) || 0, zeros: $("zeros").checked, align: $("align").value
     };
   }
 
@@ -261,6 +262,7 @@
     if (m.bg) $("bg").value = m.bg;
     $("counterOn").checked = !!m.counterOn;
     $("zeros").checked = !!m.zeros;
+    if (m.align != null) { $("align").value = m.align; state.loadedAlign = m.align; }
     if (m.decimals != null) { $("decimals").value = m.decimals; state.decManual = true; }
     state.loadedNum = m.num0 == null ? null : m.num0;
     if (m.size != null) $("scale").value = m.size;
@@ -297,12 +299,16 @@
         N: slots, dec: dec, zeros: $("zeros").checked, M: Math.max(0, slots - dec - 1),
         t: tb.t, num0: FntCounter.typedNumber($("text").value, dec)
       };
+      counter.cx = []; counter.nn = []; // per digit slot: cursor position (scale 1, tracking 0) and letters advanced before it
+      counter.align0 = parseFloat($("align").value);
       glyphs.forEach(function (gl, i) {
         var lg = L.glyphs[i], b = base.glyphs[i], def = state.font.chars[lg.id];
         gl.slot = lg.slot; gl.before = lg.before;
         if (lg.slot >= 0) {
           gl.cx1 = b.x + b.w / 2 - def.xoffset - def.width / 2;
           gl.y0 = b.y + b.h / 2 - def.yoffset - def.height / 2;
+          counter.cx[lg.slot] = gl.cx1;
+          counter.nn[lg.slot] = lg.n;
         }
       });
     }
@@ -320,6 +326,7 @@
       meta: JSON.stringify(settings),
       counter: counter,
       setNumber: !linked || state.loadedNum !== (counter ? counter.num0 : null),
+      setAlign: !linked || state.loadedAlign !== (counter ? $("align").value : null),
       glyphs: glyphs
     };
     var call = "fntReaderBuildComp(" + JSON.stringify(JSON.stringify(payload)) + ")";
@@ -327,6 +334,7 @@
     host.evalScript(call, function (res) {
       if (res.indexOf("OK:") === 0) {
         state.loadedNum = counter ? counter.num0 : null;
+        state.loadedAlign = counter ? $("align").value : null;
         link({ id: parseInt(res.slice(3), 10), name: linked ? state.linked.name : payload.compName });
         setStatus(linked ? "Composition updated." : "Composition created.");
       } else setStatus(res, true);
@@ -358,9 +366,11 @@
       if (res.indexOf("OK|") !== 0) return setStatus(res, true);
       var p = res.split("|");
       var meta;
-      try { meta = JSON.parse(p.slice(6).join("|")); } catch (e) { return setStatus("Could not read this composition's settings.", true); }
+      try { meta = JSON.parse(p.slice(7).join("|")); } catch (e) { return setStatus("Could not read this composition's settings.", true); }
       // current Controller slider values take priority over the saved ones
       meta.size = parseFloat(p[3]); meta.tracking = parseFloat(p[4]); meta.lineHeight = parseFloat(p[5]);
+      var al = parseFloat(p[6]);
+      if (!isNaN(al)) meta.align = al < 25 ? "0" : al > 75 ? "100" : "50";
       var fntPath = meta.fnt;
       if (window.cep.fs.stat(fntPath).err !== 0) {
         // file moved/renamed: ask the user to locate it
@@ -380,7 +390,7 @@
     if (!tb.ok) cb.checked = false;
     $("counterHint").hidden = tb.ok;
     $("counterHint").textContent = tb.ok ? "" : "Number counter unavailable: " + tb.reason + ".";
-    $("decRow").hidden = $("zerosRow").hidden = !cb.checked;
+    $("decRow").hidden = $("alignRow").hidden = $("zerosRow").hidden = !cb.checked;
   }
 
   function onTextInput() {
@@ -400,7 +410,8 @@
     $("zeros").checked = false;
     state.font = null; state.imgs = []; state.fntPath = null; state.pngPaths = [];
     state.overrides = {}; state.selected = null; state.layout = null; state.view = null;
-    state.decManual = false; state.loadedNum = null;
+    state.decManual = false; state.loadedNum = null; state.loadedAlign = null;
+    $("align").value = "50";
     $("fontName").textContent = "No font loaded";
     $("fontName").classList.add("muted");
     $("btnCreate").disabled = true;

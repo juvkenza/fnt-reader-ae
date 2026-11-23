@@ -47,6 +47,13 @@
     <label class="check"><input id="counterOn" type="checkbox"> Number counter (adds a “Number” slider to the Controller)</label>
     <div id="counterHint" class="warn small full" hidden></div>
     <label id="decRow" hidden>Decimals <input id="decimals" class="scrub" type="text" inputmode="decimal" value="0" data-min="0" data-max="9" data-step="1"></label>
+    <label id="alignRow" hidden>Alignment
+      <select id="align">
+        <option value="0">Left</option>
+        <option value="50" selected>Center</option>
+        <option value="100">Right</option>
+      </select>
+    </label>
     <label id="zerosRow" class="check" hidden><input id="zeros" type="checkbox"> Show leading zeros</label>
   </section>
 

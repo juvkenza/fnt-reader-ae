@@ -95,12 +95,12 @@ function fntCounterPre(cn, g) {
     var out = "var c = thisLayer.parent;\n" +
         "var n = c ? c.effect(\"Number\")(1) : " + cn.num0 + ";\n" +
         "var V = Math.min(Math.round(Math.abs(n) * " + Math.pow(10, cn.dec) + "), " + (Math.pow(10, cn.N) - 1) + ");\n" +
-        "var fv = Math.min(" + cn.M + ", " + cn.N + " - String(V).length);\n";
+        "var fv = " + (cn.zeros ? "0" : "Math.min(" + cn.M + ", " + cn.N + " - String(V).length)") + ";\n";
     if (g.slot >= 0) {
         out += "var dg = Math.floor(V / Math.pow(10, " + (cn.N - 1 - g.slot) + ")) % 10;\n" +
-            "var vis = " + (cn.zeros ? "true" : "false") + " || " + g.slot + " >= fv;\n";
+            "var vis = " + g.slot + " >= fv;\n";
     } else {
-        out += "var vis = " + (cn.zeros ? "true" : "false") + " || " + g.before + " == 0 || fv < " + g.before + ";\n";
+        out += "var vis = " + g.before + " == 0 || fv < " + g.before + ";\n";
     }
     return out;
 }
@@ -113,22 +113,38 @@ function fntCounterTables(cn) {
 
 // The expressions add, to the static value/keyframes, the difference caused by the sliders
 // (so letters can still be animated by hand).
+// With the number counter, the hidden leading digits/separators are removed from the line and the
+// visible text is aligned inside the full block using the Controller's "Alignment" slider
+// (0 = left, 50 = center, 100 = right). Prefix characters travel with the number.
 function fntPosExpr(g, d) {
+    var cn = d.counter;
     var px = g.P - d.Wb / 2;
     var nn = g.n - (d.Nw - 1) / 2;
     var ll = g.line - d.lines / 2;
-    var out;
-    if (d.counter && g.slot >= 0) {
-        out = fntCounterPre(d.counter, g) + fntCounterTables(d.counter) +
-            "var Px = " + g.cx1 + " + XO[dg] + SW[dg] / 2 - " + (d.Wb / 2) + ";\n" +
-            "var Qx = " + g.y0 + " + YO[dg] + SH[dg] / 2;\n";
+    var out, shift;
+    if (cn) {
+        out = fntCounterPre(cn, g);
+        if (g.slot >= 0) {
+            out += fntCounterTables(cn) +
+                "var Px = " + g.cx1 + " + XO[dg] + SW[dg] / 2 - " + (d.Wb / 2) + ";\n" +
+                "var Qx = " + g.y0 + " + YO[dg] + SH[dg] / 2;\n";
+        } else {
+            out += "var Px = " + px + ", Qx = " + g.Q + ";\n";
+        }
+        out += "var CX = " + fntArr(cn.cx) + ", NN = " + fntArr(cn.nn) + ";\n" +
+            "var A = c ? c.effect(\"Alignment\")(1) / 100 : 1;\n";
+        var isPrefix = g.slot < 0 && g.before === 0;
+        shift = "  var H = s * ((CX[fv] - CX[0]) + t * (NN[fv] - NN[0]));\n" +
+            "  var ax = " + (isPrefix ? "A * H" : "-(1 - A) * H") + ";\n";
     } else {
         out = "var c = thisLayer.parent;\nvar Px = " + px + ", Qx = " + g.Q + ";\n";
+        shift = "  var ax = 0;\n";
     }
     return out + "var r = value;\n" +
         "if (c) {\n" +
         "  var s = c.effect(\"Size\")(1) / 100, t = c.effect(\"Tracking\")(1), lh = c.effect(\"Line Height\")(1);\n" +
-        "  var dx = s * (Px + t * " + nn + ") - " + d.s0 + " * (" + px + " + " + d.t0 + " * " + nn + ");\n" +
+        shift +
+        "  var dx = s * (Px + t * " + nn + ") - " + d.s0 + " * (" + px + " + " + d.t0 + " * " + nn + ") + ax;\n" +
         "  var dy = s * (Qx + " + ll + " * lh) - " + d.s0 + " * (" + g.Q + " + " + ll + " * " + d.lh0 + ");\n" +
         "  r = value + [dx, dy];\n" +
         "}\nr";
@@ -245,8 +261,10 @@ function fntReaderBuildComp(json) {
         var fxp = ctrl.property("ADBE Effect Parade");
         if (data.counter) {
             if (data.setNumber || !fxp.property("Number")) fntSlider(ctrl, "Number", data.counter.num0);
-        } else if (fxp.property("Number")) {
-            fxp.property("Number").remove();
+            if (data.setAlign || !fxp.property("Alignment")) fntSlider(ctrl, "Alignment", data.counter.align0);
+        } else {
+            if (fxp.property("Number")) fxp.property("Number").remove();
+            if (fxp.property("Alignment")) fxp.property("Alignment").remove();
         }
         ctrl.comment = FNT_META + data.meta;
 
@@ -290,7 +308,7 @@ function fntReaderBuildComp(json) {
 }
 
 // Reads the settings of the active composition (created by FNT Reader).
-// Reply: OK|id|name|size|tracking|lineHeight|meta(json)
+// Reply: OK|id|name|size|tracking|lineHeight|alignment|meta(json)
 function fntReaderReadActive() {
     var c = app.project.activeItem;
     if (!(c instanceof CompItem)) return "ERROR: open/select a composition.";
@@ -298,5 +316,5 @@ function fntReaderReadActive() {
     if (!ctrl) return "ERROR: this composition was not created by FNT Reader.";
     var fx = ctrl.property("ADBE Effect Parade");
     function v(n) { var p = fx.property(n); return p ? p.property(1).value : ""; }
-    return "OK|" + c.id + "|" + c.name + "|" + v("Size") + "|" + v("Tracking") + "|" + v("Line Height") + "|" + ctrl.comment.substr(FNT_META.length);
+    return "OK|" + c.id + "|" + c.name + "|" + v("Size") + "|" + v("Tracking") + "|" + v("Line Height") + "|" + v("Alignment") + "|" + ctrl.comment.substr(FNT_META.length);
 }

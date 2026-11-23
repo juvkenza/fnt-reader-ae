@@ -48,6 +48,7 @@ Type the number in its final form (e.g. `1250` or `+1,250.00`) and tick **Number
 - Digit slots keep the spacing of the typed text, so type the largest value you need. Values above it are clamped.
 - **Decimals** is detected from the text (digits after the last `.`); change it if needed. The slider is in natural units, so `+1,250.00` with 2 decimals is driven by `1250`, not `125000`.
 - Leading zeros, and separators before the first visible digit, are hidden. Tick **Show leading zeros** to keep them.
+- **Alignment**: the visible text is packed and aligned inside the block of the typed text (left, center or right). Choose the starting value in the panel; it becomes an **Alignment** slider on the Controller (0 = left, 50 = center, 100 = right) that you can change or keyframe. Prefix characters travel with the number. Meant for single-line text.
 - Prefix characters (such as `+`) always show; kerning pairs are not applied between digits that change.
 - Needs all ten digits on the same atlas page of the font.
 

@@ -47,7 +47,8 @@ function buildPayload(font, text, o) {
     const N = FntCounter.annotate(L.glyphs);
     const dec = o.counter.dec;
     data.counter = {
-      N, dec, zeros: !!o.counter.zeros, M: Math.max(0, N - dec - 1), t: tb.t, num0: FntCounter.typedNumber(text, dec)
+      N, dec, zeros: !!o.counter.zeros, M: Math.max(0, N - dec - 1), t: tb.t, num0: FntCounter.typedNumber(text, dec),
+      cx: [], nn: []
     };
     data.glyphs.forEach((gl, i) => {
       const lg = L.glyphs[i], b = base.glyphs[i], def = font.chars[lg.id];
@@ -55,6 +56,8 @@ function buildPayload(font, text, o) {
       if (lg.slot >= 0) {
         gl.cx1 = b.x + b.w / 2 - def.xoffset - def.width / 2;
         gl.y0 = b.y + b.h / 2 - def.yoffset - def.height / 2;
+        data.counter.cx[lg.slot] = gl.cx1;
+        data.counter.nn[lg.slot] = lg.n;
       }
     });
   }
@@ -63,7 +66,7 @@ function buildPayload(font, text, o) {
 
 // Runs an AE expression with a mocked controller.
 function run(expr, value, ctrl) {
-  const eff = { Size: ctrl.size, Tracking: ctrl.tracking, "Line Height": ctrl.lineHeight, Number: ctrl.number };
+  const eff = { Size: ctrl.size, Tracking: ctrl.tracking, "Line Height": ctrl.lineHeight, Number: ctrl.number, Alignment: ctrl.align == null ? 100 : ctrl.align };
   const env = {
     thisLayer: { parent: { effect: (n) => () => eff[n] } },
     value: value,
@@ -165,4 +168,35 @@ test("counter helpers", () => {
   assert.strictEqual(FntCounter.typedNumber("abc", 0), 0);
   const bad = FntParser.parse('common lineHeight=10 base=8\npage id=0 file="a.png"\nchar id=48 x=0 y=0 width=3 height=3 xoffset=0 yoffset=0 xadvance=4');
   assert.strictEqual(FntCounter.digitTables(bad).ok, false);
+});
+
+test("counter: Alignment slider packs the visible text and aligns it inside the block", () => {
+  const font = loadFont();
+  const text = "+1,250.00";
+  const opts = { s0: 1.1, t0: 3, lh0: 60, counter: { dec: 2 } };
+  const { data } = buildPayload(font, text, opts);
+  const s = 0.9, t = 6, lh = 70;
+  const Wfixed = layoutText(font, text, { scale: s, tracking: t, lineHeight: lh }).width;
+  const tb = FntCounter.digitTables(font).t;
+  for (const number of [1250, 37.5, 0.37, 4]) {
+    for (const align of [0, 50, 100]) {
+      const c = { size: s * 100, tracking: t, lineHeight: lh, number, align };
+      const shownGlyphs = data.glyphs.filter((g) => run(host.fntVisExpr(data.counter, g), 100, c) !== 0);
+      // digits actually displayed (read back from the anchor expressions)
+      const str = shownGlyphs.map((g) => {
+        if (g.slot < 0) return g.char;
+        const a = run(host.fntAnchorExpr(data.counter, g), [0, 0], c);
+        return String(tb.sx.findIndex((x, k) => x + tb.sw[k] / 2 === a[0] && tb.sy[k] + tb.sh[k] / 2 === a[1]));
+      }).join("");
+      const E = layoutText(font, str, { scale: s, tracking: t, lineHeight: lh });
+      const start = (align / 100) * (Wfixed - E.width);
+      shownGlyphs.forEach((g, j) => {
+        const r = run(host.fntPosExpr(g, data), [g.relx, g.rely], c);
+        const w = E.glyphs[j];
+        const tag = `number=${number} align=${align} j=${j} (${str})`;
+        near(r[0], w.x + w.w / 2 - Wfixed / 2 + start, "x " + tag);
+        near(r[1], w.y + w.h / 2 - E.height / 2, "y " + tag);
+      });
+    }
+  }
 });
