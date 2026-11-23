@@ -85,17 +85,51 @@ function fntSetMask(layer, g) {
     mask.property("ADBE Mask Shape").setValue(shape);
 }
 
+// ---------- expressions ----------
+function fntArr(a) { return "[" + a.join(",") + "]"; }
+
+// Number counter: the Controller's "Number" slider decides which digit glyph each digit slot shows.
+// Defines: c (controller), V (integer shown), fv (first visible digit slot), vis, and dg (the digit
+// of this slot). cn = payload.counter; g = glyph (g.slot >= 0 for digit slots, g.before for separators).
+function fntCounterPre(cn, g) {
+    var out = "var c = thisLayer.parent;\n" +
+        "var n = c ? c.effect(\"Number\")(1) : " + cn.num0 + ";\n" +
+        "var V = Math.min(Math.round(Math.abs(n) * " + Math.pow(10, cn.dec) + "), " + (Math.pow(10, cn.N) - 1) + ");\n" +
+        "var fv = Math.min(" + cn.M + ", " + cn.N + " - String(V).length);\n";
+    if (g.slot >= 0) {
+        out += "var dg = Math.floor(V / Math.pow(10, " + (cn.N - 1 - g.slot) + ")) % 10;\n" +
+            "var vis = " + (cn.zeros ? "true" : "false") + " || " + g.slot + " >= fv;\n";
+    } else {
+        out += "var vis = " + (cn.zeros ? "true" : "false") + " || " + g.before + " == 0 || fv < " + g.before + ";\n";
+    }
+    return out;
+}
+
+function fntCounterTables(cn) {
+    var t = cn.t;
+    return "var SX = " + fntArr(t.sx) + ", SY = " + fntArr(t.sy) + ", SW = " + fntArr(t.sw) + ", SH = " + fntArr(t.sh) +
+        ", XO = " + fntArr(t.xo) + ", YO = " + fntArr(t.yo) + ";\n";
+}
+
 // The expressions add, to the static value/keyframes, the difference caused by the sliders
 // (so letters can still be animated by hand).
 function fntPosExpr(g, d) {
     var px = g.P - d.Wb / 2;
     var nn = g.n - (d.Nw - 1) / 2;
     var ll = g.line - d.lines / 2;
-    return "var c = thisLayer.parent; var r = value;\n" +
+    var out;
+    if (d.counter && g.slot >= 0) {
+        out = fntCounterPre(d.counter, g) + fntCounterTables(d.counter) +
+            "var Px = " + g.cx1 + " + XO[dg] + SW[dg] / 2 - " + (d.Wb / 2) + ";\n" +
+            "var Qx = " + g.y0 + " + YO[dg] + SH[dg] / 2;\n";
+    } else {
+        out = "var c = thisLayer.parent;\nvar Px = " + px + ", Qx = " + g.Q + ";\n";
+    }
+    return out + "var r = value;\n" +
         "if (c) {\n" +
         "  var s = c.effect(\"Size\")(1) / 100, t = c.effect(\"Tracking\")(1), lh = c.effect(\"Line Height\")(1);\n" +
-        "  var dx = s * (" + px + " + t * " + nn + ") - " + d.s0 + " * (" + px + " + " + d.t0 + " * " + nn + ");\n" +
-        "  var dy = s * (" + g.Q + " + " + ll + " * lh) - " + d.s0 + " * (" + g.Q + " + " + ll + " * " + d.lh0 + ");\n" +
+        "  var dx = s * (Px + t * " + nn + ") - " + d.s0 + " * (" + px + " + " + d.t0 + " * " + nn + ");\n" +
+        "  var dy = s * (Qx + " + ll + " * lh) - " + d.s0 + " * (" + g.Q + " + " + ll + " * " + d.lh0 + ");\n" +
         "  r = value + [dx, dy];\n" +
         "}\nr";
 }
@@ -105,11 +139,39 @@ function fntScaleExpr(d) {
         "if (c) { var k = c.effect(\"Size\")(1) / 100 / " + d.s0 + "; r = [value[0] * k, value[1] * k]; }\nr";
 }
 
+function fntAnchorExpr(cn, g) {
+    return fntCounterPre(cn, g) + fntCounterTables(cn) + "[SX[dg] + SW[dg] / 2, SY[dg] + SH[dg] / 2]";
+}
+
+function fntMaskExpr(cn, g) {
+    var z = "[[0,0],[0,0],[0,0],[0,0]]";
+    return fntCounterPre(cn, g) + fntCounterTables(cn) +
+        "var x0 = SX[dg], y0 = SY[dg], x1 = x0 + SW[dg], y1 = y0 + SH[dg];\n" +
+        "createPath([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], " + z + ", " + z + ", true)";
+}
+
+function fntVisExpr(cn, g) {
+    return fntCounterPre(cn, g) + "value * (vis ? 1 : 0)";
+}
+
+// Sets an expression ("" clears it) unless the property is keyframed.
+function fntSetExprOrClear(prop, expr) {
+    if (prop.numKeys > 0) return;
+    prop.expression = expr || "";
+}
+
 function fntApplyGlyph(layer, g, d) {
     layer.name = g.char + " " + (g.index + 1);
+    var cn = d.counter;
+    var isDigit = !!cn && g.slot >= 0;
+    var isSep = !!cn && g.slot < 0;
+
     fntSetMask(layer, g);
+    layer.property("ADBE Mask Parade").property(1).property("ADBE Mask Shape").expression = isDigit ? fntMaskExpr(cn, g) : "";
+
     var t = layer.property("ADBE Transform Group");
-    fntSetIfFree(t.property("ADBE Anchor Point"), [g.sx + g.sw / 2, g.sy + g.sh / 2]);
+    var anchor = t.property("ADBE Anchor Point");
+    if (fntSetIfFree(anchor, [g.sx + g.sw / 2, g.sy + g.sh / 2])) anchor.expression = isDigit ? fntAnchorExpr(cn, g) : "";
 
     var pos = t.property("ADBE Position");
     if (fntSetIfFree(pos, [g.relx, g.rely])) fntSetExpr(pos, fntPosExpr(g, d));
@@ -118,6 +180,9 @@ function fntApplyGlyph(layer, g, d) {
     if (fntSetIfFree(sc, [g.scale * 100, g.scale * 100])) fntSetExpr(sc, fntScaleExpr(d));
 
     fntSetIfFree(t.property("ADBE Rotate Z"), g.rot || 0);
+
+    // leading zeros / separators that should not show for the current number
+    t.property("ADBE Opacity").expression = (isDigit || isSep) ? fntVisExpr(cn, g) : "";
 }
 
 // payload (JSON string): see panel/js/main.js -> createComp()
@@ -177,6 +242,12 @@ function fntReaderBuildComp(json) {
         fntSlider(ctrl, "Size", data.s0 * 100);
         fntSlider(ctrl, "Tracking", data.t0);
         fntSlider(ctrl, "Line Height", data.lh0);
+        var fxp = ctrl.property("ADBE Effect Parade");
+        if (data.counter) {
+            if (data.setNumber || !fxp.property("Number")) fntSlider(ctrl, "Number", data.counter.num0);
+        } else if (fxp.property("Number")) {
+            fxp.property("Number").remove();
+        }
         ctrl.comment = FNT_META + data.meta;
 
         // existing letter layers (by index)

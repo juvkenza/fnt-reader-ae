@@ -23,6 +23,7 @@ button.primary { background: #2d6cdf; border-color: #2d6cdf; padding: 8px; font-
 button.primary:disabled { background: #3a3a3a; border-color: #555; color: #777; cursor: default; }
 .small-btn { padding: 1px 8px; }
 .muted { color: #888; }
+.grow { flex: 1; }
 .small { font-size: 11px; }
 .warn { color: #e8b04a; }
 canvas { width: 100%; border: 1px solid #444; border-radius: 3px; outline: none; background: #111; }

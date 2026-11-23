@@ -14,6 +14,7 @@ After Effects can import the `.png` atlas but not the `.fnt` that describes it. 
 - Number fields behave like After Effects: drag to scrub, **Shift** for bigger steps, **Ctrl** for fine steps.
 - Builds a composition where each letter is its own layer (the atlas masked to the glyph, anchor point at the glyph center). The comp is sized to the text plus a margin.
 - A centered guide shape layer, **Controller**, parents every letter and exposes **Size**, **Tracking** and **Line Height** sliders, so you can still adjust the text from the timeline.
+- **Number counter**: add a **Number** slider to the Controller and keyframe it (e.g. 0 → 1250); every digit slot swaps to the matching glyph of your font, with leading zeros and separators hidden as the number grows.
 - Edit existing comps: load a comp's font and settings back into the panel and update it in place, without recreating it. Properties you keyframed are left untouched.
 
 ## Install
@@ -33,9 +34,22 @@ The `.zxp` is signed with a self-signed certificate, so no debug mode or registr
 1. Click **Open .fnt…** and pick your font. The `.png` page(s) must be in the same folder.
 2. Type your text. Adjust size, tracking and line height.
 3. Click a letter in the preview to adjust it on its own (kerning, Y, scale, rotation; arrow keys nudge kerning and Y).
-4. Click **Create composition**.
+4. Optional: tick **Number counter** to animate a number (see below).
+5. Click **Create composition**.
+
+The **Clear** button resets the panel to its initial state.
 
 To change it later, select the comp and click **Load from active comp**, edit, then **Update composition**. If the original `.fnt` was moved, the panel asks you to locate it.
+
+## Number counter
+
+Type the number in its final form (e.g. `1250` or `+1,250.00`) and tick **Number counter**. The Controller gets a **Number** slider (set to the typed value). Keyframe it and the digits update, using your font's own 0–9 glyphs:
+
+- Digit slots keep the spacing of the typed text, so type the largest value you need. Values above it are clamped.
+- **Decimals** is detected from the text (digits after the last `.`); change it if needed. The slider is in natural units, so `+1,250.00` with 2 decimals is driven by `1250`, not `125000`.
+- Leading zeros, and separators before the first visible digit, are hidden. Tick **Show leading zeros** to keep them.
+- Prefix characters (such as `+`) always show; kerning pairs are not applied between digits that change.
+- Needs all ten digits on the same atlas page of the font.
 
 ## Supported fonts
 

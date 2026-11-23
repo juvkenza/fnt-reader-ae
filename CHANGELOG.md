@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- **Number counter**: tick "Number counter" and the Controller gets a **Number** slider. Keyframe it
+  (e.g. 0 -> 1250) and every digit slot swaps to the matching digit glyph of the font. Leading zeros
+  and separators that do not belong to the current number are hidden (or shown with "Show leading
+  zeros"); "Decimals" is detected from the text ("$1,250.00" -> 2) and can be changed.
+- **Clear** button: resets the whole panel to its initial state.
+
 ## 0.1.0
 
 First release.

@@ -8,7 +8,8 @@
 <body>
   <section class="row">
     <button id="btnOpen">Open .fnt…</button>
-    <span id="fontName" class="muted">No font loaded</span>
+    <span id="fontName" class="muted grow">No font loaded</span>
+    <button id="btnClear" class="small-btn" title="Reset the panel to its initial state">Clear</button>
   </section>
 
   <section>
@@ -43,6 +44,13 @@
   </section>
 
   <section class="grid">
+    <label class="check"><input id="counterOn" type="checkbox"> Number counter (adds a “Number” slider to the Controller)</label>
+    <div id="counterHint" class="warn small full" hidden></div>
+    <label id="decRow" hidden>Decimals <input id="decimals" class="scrub" type="text" inputmode="decimal" value="0" data-min="0" data-max="9" data-step="1"></label>
+    <label id="zerosRow" class="check" hidden><input id="zeros" type="checkbox"> Show leading zeros</label>
+  </section>
+
+  <section class="grid">
     <div class="full"><span id="link" class="muted">Composition: new</span><span><button id="btnLoad" class="small-btn" title="Load the font and settings from the active composition">Load from active comp</button> <button id="btnUnlink" class="small-btn" hidden>Unlink</button></span></div>
     <label class="full" id="nameRow">Comp name <input id="compName" type="text" value="FNT Text"></label>
     <label>FPS <input id="fps" class="scrub" type="text" inputmode="decimal" value="30" data-min="1"></label>
@@ -56,6 +64,7 @@
 
   <script src="../core/fntParser.js"></script>
   <script src="../core/layout.js"></script>
+  <script src="../core/counter.js"></script>
   <script src="js/scrub.js"></script>
   <script src="js/main.js"></script>
 </body>

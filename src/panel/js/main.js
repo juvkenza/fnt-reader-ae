@@ -8,8 +8,11 @@
   var state = {
     font: null, imgs: [], fntPath: null, pngPaths: [],
     overrides: {}, selected: null, layout: null, view: null,
-    linked: null // { id, name } of the linked comp (update mode)
+    linked: null, // { id, name } of the linked comp (update mode)
+    decManual: false, // the user edited "Decimals" by hand: stop auto-detecting it
+    loadedNum: null // typed number stored in the linked comp (to know if the Number slider must be reset)
   };
+  var defaults = {};
 
   var canvas = $("preview");
   var ctx = canvas.getContext("2d");
@@ -131,6 +134,7 @@
     state.layout = FntLayout.layoutText(state.font, $("text").value, currentOptions());
     var m = state.layout.missing;
     $("missing").hidden = !m.length;
+    updateCounterUi();
     $("missing").textContent = m.length ? "No glyph in this font for: " + m.map(function (c) { return "“" + c + "”"; }).join(" ") : "";
     draw();
   }
@@ -243,7 +247,8 @@
     return {
       fnt: state.fntPath, text: $("text").value, overrides: state.overrides,
       padding: parseFloat($("padding").value) || 0, fps: parseFloat($("fps").value) || 30,
-      duration: parseFloat($("duration").value) || 5, bg: $("bg").value
+      duration: parseFloat($("duration").value) || 5, bg: $("bg").value,
+      counterOn: $("counterOn").checked, decimals: parseInt($("decimals").value, 10) || 0, zeros: $("zeros").checked
     };
   }
 
@@ -254,6 +259,10 @@
     if (m.fps != null) $("fps").value = m.fps;
     if (m.duration != null) $("duration").value = m.duration;
     if (m.bg) $("bg").value = m.bg;
+    $("counterOn").checked = !!m.counterOn;
+    $("zeros").checked = !!m.zeros;
+    if (m.decimals != null) { $("decimals").value = m.decimals; state.decManual = true; }
+    state.loadedNum = m.num0 == null ? null : m.num0;
     if (m.size != null) $("scale").value = m.size;
     if (m.tracking != null) $("tracking").value = m.tracking;
     if (m.lineHeight != null) $("lineHeight").value = m.lineHeight;
@@ -276,8 +285,30 @@
         P: b.x + b.w / 2, Q: b.y + b.h / 2, n: g.n, line: g.line
       };
     });
+    var counter = null;
+    if ($("counterOn").checked) {
+      var tb = FntCounter.digitTables(state.font);
+      if (!tb.ok) return setStatus("Number counter unavailable: " + tb.reason + ".", true);
+      var slots = FntCounter.annotate(L.glyphs);
+      if (slots < 1) return setStatus("Number counter: type at least one digit.", true);
+      if (slots > FntCounter.MAX_SLOTS) return setStatus("Number counter: at most " + FntCounter.MAX_SLOTS + " digits.", true);
+      var dec = Math.max(0, Math.min(parseInt($("decimals").value, 10) || 0, slots));
+      counter = {
+        N: slots, dec: dec, zeros: $("zeros").checked, M: Math.max(0, slots - dec - 1),
+        t: tb.t, num0: FntCounter.typedNumber($("text").value, dec)
+      };
+      glyphs.forEach(function (gl, i) {
+        var lg = L.glyphs[i], b = base.glyphs[i], def = state.font.chars[lg.id];
+        gl.slot = lg.slot; gl.before = lg.before;
+        if (lg.slot >= 0) {
+          gl.cx1 = b.x + b.w / 2 - def.xoffset - def.width / 2;
+          gl.y0 = b.y + b.h / 2 - def.yoffset - def.height / 2;
+        }
+      });
+    }
     var linked = !forceNew && state.linked;
     var settings = currentSettings();
+    settings.num0 = counter ? counter.num0 : null;
     settings.size = opts.scale * 100; settings.tracking = opts.tracking; settings.lineHeight = opts.lineHeight;
     var payload = {
       pngs: state.pngPaths, compId: linked ? state.linked.id : null,
@@ -287,12 +318,15 @@
       s0: opts.scale, t0: opts.tracking, lh0: opts.lineHeight || state.font.common.lineHeight,
       Wb: base.width, Nw: Nw, lines: L.lines,
       meta: JSON.stringify(settings),
+      counter: counter,
+      setNumber: !linked || state.loadedNum !== (counter ? counter.num0 : null),
       glyphs: glyphs
     };
     var call = "fntReaderBuildComp(" + JSON.stringify(JSON.stringify(payload)) + ")";
     setStatus(linked ? "Updating…" : "Creating…");
     host.evalScript(call, function (res) {
       if (res.indexOf("OK:") === 0) {
+        state.loadedNum = counter ? counter.num0 : null;
         link({ id: parseInt(res.slice(3), 10), name: linked ? state.linked.name : payload.compName });
         setStatus(linked ? "Composition updated." : "Composition created.");
       } else setStatus(res, true);
@@ -338,13 +372,57 @@
     });
   }
 
+  // ---------- number counter UI ----------
+  function updateCounterUi() {
+    var tb = state.font ? FntCounter.digitTables(state.font) : { ok: true };
+    var cb = $("counterOn");
+    cb.disabled = !tb.ok;
+    if (!tb.ok) cb.checked = false;
+    $("counterHint").hidden = tb.ok;
+    $("counterHint").textContent = tb.ok ? "" : "Number counter unavailable: " + tb.reason + ".";
+    $("decRow").hidden = $("zerosRow").hidden = !cb.checked;
+  }
+
+  function onTextInput() {
+    if (!state.decManual) $("decimals").value = FntCounter.detectDecimals($("text").value);
+    render();
+  }
+
+  // ---------- clear / reset ----------
+  ["text", "scale", "tracking", "lineHeight", "bg", "compName", "fps", "duration", "padding", "decimals"].forEach(function (id) {
+    defaults[id] = $(id).value;
+  });
+
+  function clearAll() {
+    Object.keys(defaults).forEach(function (id) { $(id).value = defaults[id]; });
+    $("lineHeight").value = "";
+    $("counterOn").checked = false;
+    $("zeros").checked = false;
+    state.font = null; state.imgs = []; state.fntPath = null; state.pngPaths = [];
+    state.overrides = {}; state.selected = null; state.layout = null; state.view = null;
+    state.decManual = false; state.loadedNum = null;
+    $("fontName").textContent = "No font loaded";
+    $("fontName").classList.add("muted");
+    $("btnCreate").disabled = true;
+    $("letterPanel").hidden = true;
+    $("missing").hidden = true;
+    unlink();
+    setStatus("");
+    updateCounterUi();
+    draw();
+  }
+
   // ---------- wiring ----------
   $("btnOpen").addEventListener("click", openFnt);
   $("btnCreate").addEventListener("click", function () { createComp(false); });
   $("btnCreateNew").addEventListener("click", function () { createComp(true); });
   $("btnLoad").addEventListener("click", loadFromActive);
   $("btnUnlink").addEventListener("click", function () { unlink(); setStatus(""); });
-  ["text", "scale", "tracking", "lineHeight"].forEach(function (id) { $(id).addEventListener("input", render); });
+  ["scale", "tracking", "lineHeight"].forEach(function (id) { $(id).addEventListener("input", render); });
+  $("text").addEventListener("input", onTextInput);
+  $("counterOn").addEventListener("change", updateCounterUi);
+  $("decimals").addEventListener("input", function () { state.decManual = true; });
+  $("btnClear").addEventListener("click", clearAll);
   $("bg").addEventListener("change", draw);
   window.addEventListener("resize", draw);
   draw();
